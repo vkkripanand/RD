@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>User Dashboard</title>
+</head>
+<body>
+
+    <style>
+        :root {
+            --primary: #0d6efd;
+            --danger: #dc3545;
+            --gray: #6c757d;
+            --light: #f8f9fa;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+
+        /* Container */
+        .container {
+            max-width: 800px;
+            margin: 80px auto;
+            padding: 0 20px;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: #212529;
+            color: white;
+            padding: 1rem;
+            position: fixed;
+            top: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,.1);
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #dee2e6;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-outline {
+            border: 1px solid var(--gray);
+            background: transparent;
+        }
+
+        .btn:hover {
+            opacity: 0.8;
+        }
+
+        /* Status Indicators */
+        .badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+        }
+
+        .bg-success {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .bg-warning {
+            background: #fff3cd;
+            color: #664d03;
+        }
+    </style>
+
+
+    <nav class="navbar">
+        <strong>My New App</strong>
+        <div id="session-status">
+            <span class="badge bg-success" id="status-text">Session Active</span>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="card">
+            <h2>DHWANI FRAMEWORK</h2>
+            <p>You are currently logged in. Your session will automatically refresh as long as you are active.</p>
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+
+            <div id="SD-USER-META" class="bg-dark text-white">
+            </div>
+            <div id="SD-EXPIRY-META" class="bg-info">
+            </div>
+            <div id="SD-ERROR-META" class="bg-warning text-white">
+            </div>
+
+            <div style="display: flex; padding:15px; justify-content: space-between; align-items: center;">
+                <button onclick="logoutUser()" class="btn btn-outline">Logout Now</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+
+        const APP_CONFIG = {
+            // Switch these when moving to staging/prod
+            AUTH_URL: "https://users.vividsol.in",
+            API_BASE_URL: "https://users.vividsol.in",
+            REFRESH_BUFFER_MS: 60000, // 1 minute
+            LOGIN_PAGE: "/login",
+            LOGOUT_PAGE: "/logout"
+        };
+
+        let lastActivity = Date.now();
+        let INACTIVITY_LIMIT = 2 * 60 * 1000; // 5 Minutes
+        let TOKEN_LIFESPAN = 5 * 60 * 1000;   // 5 Minutes
+        let REFRESH_BUFFER = 1 * 60 * 1000;    // 1 Minute
+
+        function recordActivity() {
+            const now = Date.now().toString();
+            localStorage.setItem('last_activity', now);
+        }
+
+        // Attach to listeners
+        ['mousedown', 'keydown', 'scroll', 'touchstart'].forEach(event => {
+            document.addEventListener(event, recordActivity);
+        });
+
+        // 2. The Heartbeat Timer
+        setInterval(() => {
+            const now = Date.now();
+            const lastActive = parseInt(localStorage.getItem('last_activity') || Date.now());
+            const inactiveDuration = Date.now() - lastActive;
+            if (inactiveDuration > INACTIVITY_LIMIT) {
+                logoutUser();
+                return;
+            }
+            // Check if we need to refresh (1 minute before expiry)
+            const sessionExpiry = parseInt(localStorage.getItem('session_expiry'));
+            if (now > (sessionExpiry - REFRESH_BUFFER)) {
+                refreshSession();
+            }
+        }, 10000); // Check every 10 seconds
+
+        async function refreshSession() {
+            try {
+                const resp = await fetch(`${APP_CONFIG.API_BASE_URL}/api/auth/RefreshCookie`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (resp.ok) {
+                    // Update your local timer for the next refresh
+                    const newExpiry = Date.now() + TOKEN_LIFESPAN;
+                    localStorage.setItem('session_expiry', newExpiry);
+                    console.log("Refresh done:");
+                    getUserProfile();
+                    getExpiryTime();
+                }
+            } catch (e) { console.error("Refresh failed", e); }
+        }
+
+        function logoutUser() {
+            fetch(`${APP_CONFIG.API_BASE_URL}/api/auth/logout`, {
+                method: 'POST',
+                credentials: 'include'
+            }).then(() => {
+                window.location.href = `${APP_CONFIG.AUTH_URL}${APP_CONFIG.LOGOUT_PAGE}`;
+            });
+        }
+
+        function getCookie(name) {
+             let cookieArr = document.cookie.split(";");
+             for (let i = 0; i < cookieArr.length; i++) {
+                 let cookiePair = cookieArr[i].split("=");
+                 if (name == cookiePair[0].trim()) {
+                     return decodeURIComponent(cookiePair[1]);
+                 }
+             }
+             return null;
+         }
+ 
+          function getExpiryTime() {
+              const expiryStr = getCookie("SessionExpiry");
+              if (expiryStr) {
+                  const expiryTime = new Date(expiryStr).getTime();
+                  const now = Date.now();
+                  const timeLeft = expiryTime - now;
+        
+                  const expiryMillis = new Date(expiryStr).getTime();
+                  localStorage.setItem('session_expiry', expiryMillis.toString());
+                  const dateObject = new Date(expiryMillis);
+                  const localString = dateObject.toLocaleString();
+                  document.getElementById('SD-EXPIRY-META').innerHTML = localString;
+              }
+          }
+        
+          function getUserProfile() {
+              const prefsRaw = getCookie("UserProfile");
+              if (prefsRaw) {
+                  const prefs = JSON.parse(prefsRaw);
+                  console.log("CID:", prefs.CID);
+                  TOKEN_LIFESPAN = prefs.TokenTime * 60 * 1000;
+                  console.log("TT:", prefs.TokenTime);
+                  INACTIVITY_LIMIT = prefs.Inactivity * 60 * 1000;
+                  console.log("Inactivity:", prefs.Inactivity);
+                  document.getElementById('SD-USER-META').innerHTML = prefs.CID;
+              }
+          }
+        
+          document.addEventListener("DOMContentLoaded", async function () {
+              fetch(`${APP_CONFIG.API_BASE_URL}/api/auth/GetMeNew`, {
+                  credentials: 'include'
+              })
+                  .then(res => {
+                      if (res.status === 200) {
+                          // API saw the cookie and returned user info
+                          console.log("User is authenticated");
+                          getUserProfile();
+                          getExpiryTime();
+                          recordActivity();
+                      } else {
+                          // No cookie or invalid cookie
+                          window.location.href = `${APP_CONFIG.AUTH_URL}${APP_CONFIG.LOGIN_PAGE}`;
+                      }
+                  });
+          });
+        
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'last_activity') {
+                console.log("Activity detected in another tab! Resetting local timer.");
+                // Your local 'lastActivity' variable is now effectively synced
+            }
+        });
+
+    </script>
+
+</body>
+</html>
