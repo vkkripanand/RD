@@ -202,7 +202,7 @@
          }
  
           function getExpiryTime() {
-              const expiryStr = getCookie("SessionExpiry");
+              const expiryStr = getCookie("RDSessionExpiry");
               if (expiryStr) {
                   const expiryTime = new Date(expiryStr).getTime();
                   const now = Date.now();
@@ -217,7 +217,7 @@
           }
         
           function getUserProfile() {
-              const prefsRaw = getCookie("UserProfile");
+              const prefsRaw = getCookie("RDUserProfile");
               if (prefsRaw) {
                   const prefs = JSON.parse(prefsRaw);
                   console.log("CID:", prefs.CID);
